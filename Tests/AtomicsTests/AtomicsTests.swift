@@ -1,15 +1,38 @@
 import XCTest
+import Promises
 @testable import Atomics
 
 final class AtomicsTests: XCTestCase {
-    func testExample() {
-        // This is an example of a functional test case.
-        // Use XCTAssert and related functions to verify your tests produce the correct
-        // results.
-        XCTAssertEqual(Atomics().text, "Hello, World!")
+    
+    func testAtomicObject () {
+        let obj = AtomicMutablePointer<[Int]>([Int]())
+        DispatchQueue.concurrentPerform(iterations: 10000) { i in
+            _ = obj.use { arr in arr.append(i) }
+        }
+        XCTAssertEqual(obj.syncPointee.count, 10000)
     }
-
-    static var allTests = [
-        ("testExample", testExample),
-    ]
+    
+    func testCachedObject () {
+        var numRequests = 0
+        let function = {
+            Promise<Date>.init(on: .global(), { fulfill, reject in
+                DispatchQueue.global().asyncAfter(deadline: .now() + .seconds(2), execute: {
+                    numRequests += 1
+                    fulfill(Date())
+                }
+            )
+                
+            })
+        }
+        
+        let obj = CachedObject<Date>(function: function, mode: .periodic(10))
+        DispatchQueue.concurrentPerform(iterations: 100, execute: { i in
+            _ = obj.use { (date) in
+                print(date)
+            }
+        })
+        usleep(3 * 1000 * 1000)
+        XCTAssertEqual(numRequests, 1)
+    }
+    
 }
