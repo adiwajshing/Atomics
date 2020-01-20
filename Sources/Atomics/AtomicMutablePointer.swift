@@ -45,12 +45,12 @@ public extension AtomicMutablePointer {
             queue.sync { obj = value }
             return obj
         }
-        set { try! await(self.set(value: newValue)) }
+        set { queue.sync { value = newValue } }
     }
     
     func get () -> Promise<Wrapped> {
         var obj: Wrapped!
-        return use({ obj = $0}).then(on: self.queue) { obj }
+        return use({ obj = $0}).then(on: queue) { obj }
     }
     func set (value: Wrapped) -> Promise<Void> { use { $0 = value } }
 }
