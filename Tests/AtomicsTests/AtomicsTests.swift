@@ -5,7 +5,7 @@ import Promises
 final class AtomicsTests: XCTestCase {
     
     func testAtomicObject () {
-        let obj = AtomicMutablePointer<[Int]>([Int]())
+		let obj = AtomicMutablePointer<[Int]>(.init())
         DispatchQueue.concurrentPerform(iterations: 10000) { i in
             _ = obj.use { arr in arr.append(i) }
         }
