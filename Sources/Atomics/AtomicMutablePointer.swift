@@ -46,8 +46,7 @@ public extension AtomicMutablePointer {
     }
     
     func get () -> Promise<Wrapped> {
-        var obj: Wrapped!
-        return use({ obj = $0}).then(on: queue) { obj }
+		map { $0 }
     }
     func set (value: Wrapped) -> Promise<Void> { use { $0 = value } }
 }
