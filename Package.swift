@@ -1,4 +1,4 @@
-// swift-tools-version:5.1
+// swift-tools-version:5.2
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -12,7 +12,7 @@ let package = Package(
             targets: ["Atomics"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/google/promises.git", from: "1.2.8")
+        .package(url: "https://github.com/apple/swift-nio.git", from: "2.0.0")
         // Dependencies declare other packages that this package depends on.
         // .package(url: /* package url */, from: "1.0.0"),
     ],
@@ -21,7 +21,7 @@ let package = Package(
         // Targets can depend on other targets in this package, and on products in packages which this package depends on.
         .target(
             name: "Atomics",
-            dependencies: ["Promises"]),
+			dependencies: [.product(name: "NIO", package: "swift-nio")]),
         .testTarget(
             name: "AtomicsTests",
             dependencies: ["Atomics"]),

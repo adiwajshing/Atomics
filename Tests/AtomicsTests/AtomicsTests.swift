@@ -1,37 +1,32 @@
 import XCTest
-import Promises
+import NIO
 @testable import Atomics
 
 final class AtomicsTests: XCTestCase {
     
+	let ev = MultiThreadedEventLoopGroup(numberOfThreads: 4)
+	
     func testAtomicObject () {
-		let obj = AtomicMutablePointer<[Int]>(.init())
-        DispatchQueue.concurrentPerform(iterations: 10000) { i in
-            _ = obj.use { arr in arr.append(i) }
-        }
+		let obj = AtomicMutablePointer<[Int]>([])
+		let tasks = (0..<10000).map { i in obj.map(on: ev.next()) { $0.append(i) } }
+		
+		XCTAssertNoThrow(try EventLoopFuture.whenAllSucceed(tasks, on: ev.next()).wait())
         XCTAssertEqual(obj.syncPointee.count, 10000)
     }
     
     func testCachedObject () {
         var numRequests = 0
-        let function = {
-            Promise<Date>.init(on: .global(), { fulfill, reject in
-                DispatchQueue.global().asyncAfter(deadline: .now() + .seconds(2), execute: {
-                    numRequests += 1
-                    fulfill(Date())
-                }
-            )
-                
-            })
+		let function: () -> EventLoopFuture<Date> = {
+			self.ev.next()
+			.scheduleTask(in: .seconds(2)) {
+				numRequests += 1
+				return Date()
+			}
+			.futureResult
         }
-        
-        let obj = CachedObject<Date>(function: function, mode: .periodic(10))
-        DispatchQueue.concurrentPerform(iterations: 100, execute: { i in
-            _ = obj.use { (date) in
-                print(date)
-            }
-        })
-        usleep(3 * 1000 * 1000)
+		let obj = CachedObject<Date>(mode: .periodic(10), eventLoop: ev.next(), function: function)
+		let tasks = (0..<500).map { _ in obj.map { $0.description } }
+		XCTAssertNoThrow(try EventLoopFuture.whenAllSucceed(tasks, on: ev.next()).wait())
         XCTAssertEqual(numRequests, 1)
     }
     

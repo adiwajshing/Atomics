@@ -6,28 +6,34 @@
 //
 
 import Foundation
-import Promises
+import NIO
 
 public class AtomicMutablePointer<Wrapped> {
-    
-    var value: Wrapped
+	var value: Wrapped
     let queue = DispatchQueue(label: String(describing: Wrapped.self) + "_atomic", attributes: [])
     
-    public init(_ value: Wrapped) { self.value = value }
+	public init(_ value: Wrapped) { self.value = value }
     
     ///Asyncrously & safely get the object and modify it as well
-    public func use (_ block: @escaping (inout Wrapped) throws -> Void ) -> Promise<Void> {
-		map(using: block) as Promise<Void>
+	public func map <T> (on ev: EventLoop, using block: @escaping (inout Wrapped) throws -> T) -> EventLoopFuture<T> {
+		flatMap(on: ev) { value in try ev.makeSucceededFuture(block (&value)) }
     }
-    public func map <T> (using block: @escaping (inout Wrapped) throws -> T) -> Promise<T> {
-		map(using: { Promise(try block (&$0)) })
-    }
-	public func map <T> (using block: @escaping (inout Wrapped) throws -> Promise<T>) -> Promise<T> {
-		Promise<Void>(())
-		.then(on: queue) { [weak self] _ throws -> Promise<T> in
-            guard let self = self else { throw Error.selfDeinit }
-            return try block(&self.value)
+	public func flatMap <T> (on ev: EventLoop, using block: @escaping (inout Wrapped) throws -> EventLoopFuture<T>) -> EventLoopFuture<T> {
+		let promise = ev.makePromise(of: T.self)
+		queue.async { [weak self] in
+			guard let self = self else {
+				promise.fail(Error.selfDeinit)
+				return
+			}
+			do {
+				let future = try block(&self.value)
+				future.whenSuccess(promise.succeed)
+				future.whenFailure(promise.fail)
+			} catch {
+				promise.fail(error)
+			}
 		}
+		return promise.futureResult
     }
     public enum Error: Swift.Error {
         case selfDeinit
@@ -44,9 +50,8 @@ public extension AtomicMutablePointer {
         }
         set { queue.sync { value = newValue } }
     }
-    
-    func get () -> Promise<Wrapped> {
-		map { $0 }
+	func get (on ev: EventLoop) -> EventLoopFuture<Wrapped> {
+		map (on: ev) { $0 }
     }
-    func set (value: Wrapped) -> Promise<Void> { use { $0 = value } }
+	func set (on ev: EventLoop, value: Wrapped) -> EventLoopFuture<Void> { map (on: ev) { $0 = value } }
 }
